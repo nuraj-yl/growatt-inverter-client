@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Monitor extends TimerTask {
 
@@ -237,51 +238,61 @@ public class Monitor extends TimerTask {
 
     public void updateOutputMode(OutputMode outputMode) throws IOException {
 
+        String cookie = loginToWebService();
+        updateOutputMode(outputMode, cookie);
+    }
+
+    public void updateOutputMode(OutputMode outputMode, String cookie) throws IOException {
+
         try {
 
-            SettingsResponse settings = readSettings();
+            int maxRetries = 5;
+            int retryCount = 1;
 
-            if (settings.getDatas()[0].getOutputConfig().equals(outputMode.getMode())) {
-                System.out.println("The setting is already set to " + outputMode + ". Operation aborted.");
-                return;
+            while (retryCount <= maxRetries) {
+                System.out.println("attempt : " + retryCount);
+                SettingsResponse settings = readSettings(cookie);
+
+                if (settings.getDatas()[0].getOutputConfig().equals(outputMode.getMode())) {
+                    System.out.println("The setting is already set to " + outputMode + ". Operation aborted.");
+                    break;
+                }
+                retryCount ++;
+
+                Retrofit retrofit = new Retrofit.Builder()
+                        .baseUrl("https://server.growatt.com/")
+                        .build();
+
+                GrowattWebService service = retrofit.create(GrowattWebService.class);
+
+                Map<String, String> fieldMap = new HashMap<>();
+                fieldMap.put("action", "storageSPF5000Set");
+                fieldMap.put("serialNum", Configurations.serialNo);
+                fieldMap.put("type", "storage_spf5000_ac_output_source");
+                fieldMap.put("param1", outputMode.getMode());
+                fieldMap.put("param2", "");
+                fieldMap.put("param3", "");
+                fieldMap.put("param4", "");
+
+                Call<ResponseBody> call = service.changeSetting(fieldMap, cookie);
+                Response<ResponseBody> response = call.execute();
+                assert response.body() != null;
+                System.out.println(response.body().string());
+                TimeUnit.SECONDS.sleep(10);
             }
-
-            String cookie = loginToWebService();
-
-            Retrofit retrofit = new Retrofit.Builder()
-                    .baseUrl("https://server.growatt.com/")
-                    .build();
-
-            GrowattWebService service = retrofit.create(GrowattWebService.class);
-
-            Map<String, String> fieldMap = new HashMap<>();
-            fieldMap.put("action", "storageSPF5000Set");
-            fieldMap.put("serialNum", Configurations.serialNo);
-            fieldMap.put("type", "storage_spf5000_ac_output_source");
-            fieldMap.put("param1", outputMode.getMode());
-            fieldMap.put("param2", "");
-            fieldMap.put("param3", "");
-            fieldMap.put("param4", "");
-
-            Call<ResponseBody> call = service.changeSetting(fieldMap, cookie);
-            Response<ResponseBody> response = call.execute();
-            assert response.body() != null;
-            System.out.println(response.body().string());
         } catch (Exception ex) {
             alertError("Error Switching to " + outputMode, ex.getMessage());
         }
     }
 
     public void updateChargingMode(ChargingMode chargingMode) throws IOException {
-
-        SettingsResponse settings = readSettings();
+        String cookie = loginToWebService();
+        SettingsResponse settings = readSettings(cookie);
 
         if (settings.getDatas()[0].getChargeConfig().equals(chargingMode.getMode())) {
             System.out.println("The setting is already set to " + chargingMode + ". Operation aborted.");
             return;
         }
-
-        String cookie = loginToWebService();
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://server.growatt.com/")
@@ -304,9 +315,7 @@ public class Monitor extends TimerTask {
         System.out.println(response.body().string());
     }
 
-    public SettingsResponse readSettings() throws IOException {
-
-        String cookie = loginToWebService();
+    public SettingsResponse readSettings(String cookie) throws IOException {
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://server.growatt.com/")
@@ -325,6 +334,40 @@ public class Monitor extends TimerTask {
         System.out.println(settings);
 
         return new Gson().fromJson(settings, SettingsResponse.class);
+    }
+
+    public double readCurrentBatCapacity(String cookie) throws IOException {
+
+        Gson gson = new GsonBuilder()
+                .setLenient()
+                .create();
+
+        HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+        OkHttpClient.Builder httpClient = new OkHttpClient.Builder();
+        httpClient.addInterceptor(logging);
+
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("https://server.growatt.com/")
+                .addConverterFactory(GsonConverterFactory.create(gson))
+                .client(httpClient.build())
+                .build();
+
+        GrowattWebService service = retrofit.create(GrowattWebService.class);
+
+        Map<String, String> fieldMap = new HashMap<>();
+        fieldMap.put("storageSn", Configurations.serialNo);
+
+        Call<CurrentStatus> status = service.getCurrentStatus(fieldMap, cookie, Configurations.plantId);
+        Response<CurrentStatus> response = status.execute();
+        assert response.body() != null;
+
+        String currentCapacity = response.body().getObj().getCapacity();
+        double capacity = Double.parseDouble(currentCapacity);
+
+        System.out.println("Current Battery Capacity : " + capacity);
+
+        return capacity;
     }
 
     @Override
