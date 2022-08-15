@@ -4,6 +4,7 @@ import model.SettingsResponse;
 import org.testng.annotations.Test;
 
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Timer;
 
 public class MonitorTest {
@@ -27,6 +28,11 @@ public class MonitorTest {
         monitor.updateOutputMode(OutputMode.SUB);
     }
 
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SOL")
+    public void testOutputChangeToSOL() throws IOException {
+        monitor.updateOutputMode(OutputMode.SOL);
+    }
+
     @Test(testName = "[CHARGING][Energy Saver] Set to Solar Only")
     public void testChargingChangeToSolarOnly() throws IOException {
         monitor.updateChargingMode(ChargingMode.SOLAR_ONLY);
@@ -39,8 +45,49 @@ public class MonitorTest {
 
     @Test
     public void testReadSettings() throws IOException {
-        SettingsResponse settings = monitor.readSettings();
+        String cookie = monitor.loginToWebService();
+        SettingsResponse settings = monitor.readSettings(cookie);
         System.out.println(settings);
     }
 
+    // Add multiple test methods for cronjob to change MODE depending on current battery capacity at different times of the day
+
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SUB 5PM")
+    public void testOutputChangeToSUB5PM() throws IOException {
+        monitor.updateOutputMode(OutputMode.SUB);
+    }
+
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SUB 4PM")
+    public void testOutputChangeToSUB4PM() throws IOException {
+        updateOutputMode(90);
+    }
+
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SUB 3PM")
+    public void testOutputChangeToSUB3PM() throws IOException {
+        updateOutputMode(75);
+    }
+
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SUB 1PM")
+    public void testOutputChangeToSUB1PM() throws IOException {
+        updateOutputMode(50);
+    }
+
+    @Test(testName = "[OUTPUT][Power-cut Safe] Set to SUB 11AM")
+    public void testOutputChangeToSUB11AM() throws IOException {
+        updateOutputMode(35);
+    }
+
+    private void updateOutputMode(double expectedBatCapacity) throws IOException {
+        String cookie = monitor.loginToWebService();
+
+        double currentCapacity = monitor.readCurrentBatCapacity(cookie);
+
+        if(currentCapacity < expectedBatCapacity) {
+            System.out.println("Current battery capacity does not satisfy expected battery capacity : " + expectedBatCapacity);
+            monitor.updateOutputMode(OutputMode.SUB, cookie);
+        } else {
+            System.out.println("Current battery capacity satisfy expected battery capacity : " + expectedBatCapacity);
+            monitor.updateOutputMode(OutputMode.SBU, cookie);
+        }
+    }
 }
