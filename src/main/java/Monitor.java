@@ -1,5 +1,6 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import model.*;
 import okhttp3.Headers;
 import okhttp3.OkHttpClient;
@@ -174,6 +175,26 @@ public class Monitor extends TimerTask {
         System.out.println(Objects.requireNonNull(response.execute().body()).string());
     }
 
+    public void alertModeChange(OutputMode outputMode, double capacity) throws IOException {
+        Gson gson = new GsonBuilder()
+                .setLenient()
+                .create();
+
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("https://chat.googleapis.com/")
+                .addConverterFactory(GsonConverterFactory.create(gson))
+                .build();
+
+        GmailWebhookService service = retrofit.create(GmailWebhookService.class);
+
+
+        String today = new SimpleDateFormat("ddMMyyyy").format(new Date());
+        JsonObject body = new JsonObject();
+        body.addProperty("text", "Output Mode Changed to : " + outputMode.toString() + " ( " + capacity + "% )");
+        Call<ResponseBody> response = service.alert(body, today);
+        System.out.println(Objects.requireNonNull(response.execute().body()).string());
+    }
+
     private void alertError(String title, String message) throws IOException {
         Gson gson = new GsonBuilder()
                 .setLenient()
@@ -239,10 +260,10 @@ public class Monitor extends TimerTask {
     public void updateOutputMode(OutputMode outputMode) throws IOException {
 
         String cookie = loginToWebService();
-        updateOutputMode(outputMode, cookie);
+        updateOutputMode(outputMode, 0, cookie);
     }
 
-    public void updateOutputMode(OutputMode outputMode, String cookie) throws IOException {
+    public void updateOutputMode(OutputMode outputMode, double capacity, String cookie) throws IOException {
 
         try {
 
@@ -278,6 +299,9 @@ public class Monitor extends TimerTask {
                 Response<ResponseBody> response = call.execute();
                 assert response.body() != null;
                 System.out.println(response.body().string());
+
+                alertModeChange(outputMode, capacity);
+
                 TimeUnit.SECONDS.sleep(10);
             }
         } catch (Exception ex) {

@@ -1,11 +1,11 @@
 # This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
 # For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
 
-name: Change to SBU 10.30 PM
+name: Change to SBU 11.30 PM
 
 on:
   schedule:
-    - cron:  '00 17 * * *'   #10.30 pm IST
+    - cron:  '00 18 * * *'   #10 pm IST
   workflow_dispatch:
 
 jobs:
@@ -22,4 +22,4 @@ jobs:
         distribution: 'temurin'
         cache: maven
     - name: Build with Maven
-      run: mvn clean install -P change-settings -Dtest="MonitorTest#testOutputChangeToSBU1030PM"
+      run: mvn clean install -P change-settings -Dtest="MonitorTest#testOutputChangeToSBU1130PM"
